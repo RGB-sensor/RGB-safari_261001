@@ -1,9 +1,13 @@
 const $ = id => document.getElementById(id);
 const video = $('video'), roi = $('roi'), stage = $('stage'), chart = $('chart');
-const state = { stream:null, active:false, samples:[], animation:null, roi:{x:.345,y:.345,w:.31}, lastFrame:0, frameCount:0 };
+const state = { stream:null, active:false, samples:[], animation:null, roi:{x:.345,y:.345,w:.31}, lastFrame:0, frameCount:0, recorder:null, videoChunks:[], videoMime:'' };
 
 function setStatus(text, live=false){ $('status').classList.toggle('live',live); $('status').querySelector('span').textContent=text; }
+function setSaveStatus(text){ $('saveStatus').textContent=text; }
 function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+function timeStamp(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`; }
+function testBase(){ const raw=$('testName').value.trim() || 'vibracolor_test'; return raw.replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,48) || 'vibracolor_test'; }
+function downloadBlob(blob, filename){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 function updateRoi(){ roi.style.left=(state.roi.x*100)+'%'; roi.style.top=(state.roi.y*100)+'%'; roi.style.width=(state.roi.w*100)+'%'; }
 function hueFromRGB(r,g,b){ r/=255;g/=255;b/=255; const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min; if(!d)return 0; let h=max===r?(g-b)/d+(g<b?6:0):max===g?(b-r)/d+2:(r-g)/d+4; return h*60; }
 function analyseFrame(now){
@@ -43,12 +47,34 @@ function drawChart(){
   const s=state.samples.at(-1),x=w,y=h-16-(s.h-lo)/range*(h-32);ctx.fillStyle='#ff9a5b';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
 }
 async function startCamera(){
-  try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:60,max:60}},audio:false}); video.srcObject=state.stream; await video.play(); $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('recordButton').disabled=false; setStatus('Camera ready',true); }
+  try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:60,max:60}},audio:false}); video.srcObject=state.stream; await video.play(); $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('stopCameraButton').disabled=false; $('videoButton').disabled=typeof MediaRecorder==='undefined'; $('recordButton').disabled=false; setStatus('Camera ready',true); if(typeof MediaRecorder==='undefined')setSaveStatus('Video recording is not available in this browser. CSV export remains available.'); }
   catch(e){ setStatus('Camera permission needed'); alert('Please allow camera access, then reload the page.'); }
+}
+function stopCamera(){
+  if(state.recorder?.state==='recording') stopVideoRecording();
+  if(state.active) toggleAnalysis();
+  state.stream?.getTracks().forEach(track => track.stop());
+  state.stream=null; video.srcObject=null;
+  $('placeholder').classList.remove('hidden'); $('cameraButton').textContent='Start camera'; $('cameraButton').disabled=false;
+  $('stopCameraButton').disabled=true; $('videoButton').disabled=true; $('recordButton').disabled=true; setStatus('Camera off');
 }
 function toggleAnalysis(){
   state.active=!state.active; $('recordButton').textContent=state.active?'Stop analysis':'Start analysis'; $('exportButton').disabled=!state.samples.length; if(state.active){state.samples=[];state.frameCount=0;state.lastFrame=performance.now();setStatus('Analysing live',true);state.animation=requestAnimationFrame(analyseFrame);}else{cancelAnimationFrame(state.animation);setStatus('Camera ready',true);$('chartNote').textContent='Analysis paused';drawChart();} }
-function exportCsv(){ const rows=['time_s,R,G,B,Hue_deg',...state.samples.map(s=>[s.t.toFixed(4),s.r.toFixed(2),s.g.toFixed(2),s.b.toFixed(2),s.h.toFixed(2)].join(','))]; const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));a.download='vibracolor_signal.csv';a.click();URL.revokeObjectURL(a.href); }
+function exportCsv(){ const stamp=timeStamp(), name=testBase(); const rows=[`test_name,${name}`,`exported_at,${new Date().toISOString()}`,'time_s,R,G,B,Hue_deg',...state.samples.map(s=>[s.t.toFixed(4),s.r.toFixed(2),s.g.toFixed(2),s.b.toFixed(2),s.h.toFixed(2)].join(','))]; downloadBlob(new Blob([rows.join('\n')],{type:'text/csv'}),`${name}_${stamp}_signal.csv`); setSaveStatus(`Saved ${name}_${stamp}_signal.csv locally.`); }
+function startVideoRecording(){
+  if(!state.stream || typeof MediaRecorder==='undefined')return;
+  const mp4='video/mp4;codecs=avc1.42E01E', webm='video/webm;codecs=vp8';
+  state.videoMime=MediaRecorder.isTypeSupported?.(mp4) ? mp4 : (MediaRecorder.isTypeSupported?.(webm) ? webm : '');
+  try { state.videoChunks=[]; state.recorder=state.videoMime ? new MediaRecorder(state.stream,{mimeType:state.videoMime}) : new MediaRecorder(state.stream); }
+  catch(e){ setSaveStatus('Video recording could not start in this browser.'); return; }
+  state.recorder.ondataavailable=e=>{ if(e.data.size)state.videoChunks.push(e.data); };
+  state.recorder.onstop=()=>{ const ext=state.recorder.mimeType.includes('mp4')?'mp4':'webm', stamp=timeStamp(), name=testBase(); downloadBlob(new Blob(state.videoChunks,{type:state.recorder.mimeType||'video/webm'}),`${name}_${stamp}_video.${ext}`); setSaveStatus(`Saved ${name}_${stamp}_video.${ext} locally.`); state.videoChunks=[]; state.recorder=null; $('videoButton').textContent='Record video'; if(state.stream)$('videoButton').disabled=false; };
+  state.recorder.start(); $('videoButton').textContent='Stop video & save'; setStatus('Video recording',true); setSaveStatus('Recording video locally. Tap “Stop video & save” when finished.');
+}
+function stopVideoRecording(){ if(state.recorder?.state==='recording')state.recorder.stop(); }
+function toggleVideoRecording(){ state.recorder?.state==='recording' ? stopVideoRecording() : startVideoRecording(); }
 $('cameraButton').onclick=startCamera; $('recordButton').onclick=toggleAnalysis; $('exportButton').onclick=exportCsv;
+$('stopCameraButton').onclick=stopCamera;
+$('videoButton').onclick=toggleVideoRecording;
 let drag=null; roi.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,rx:state.roi.x,ry:state.roi.y};roi.setPointerCapture(e.pointerId);});roi.addEventListener('pointermove',e=>{if(!drag)return;const r=stage.getBoundingClientRect();state.roi.x=clamp(drag.rx+(e.clientX-drag.x)/r.width,0,1-state.roi.w);state.roi.y=clamp(drag.ry+(e.clientY-drag.y)/r.height,0,1-state.roi.w);updateRoi();});roi.addEventListener('pointerup',()=>drag=null);
 window.addEventListener('resize',drawChart); drawChart();
