@@ -39,15 +39,22 @@ function dominantFrequency(samples){
   const variance=windowed.reduce((sum,s)=>sum+(s.h-mean)**2,0)/n;
   return variance < 0.08 ? null : bestF;
 }
-function drawChart(){
-  const rect=chart.getBoundingClientRect(), dpr=devicePixelRatio||1; chart.width=rect.width*dpr;chart.height=rect.height*dpr;const ctx=chart.getContext('2d');ctx.scale(dpr,dpr); const w=rect.width,h=rect.height;ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle='rgba(225,202,255,.14)';ctx.lineWidth=1; for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(0,h*i/4);ctx.lineTo(w,h*i/4);ctx.stroke();}
-  if(state.samples.length<2)return; const vals=state.samples.map(s=>s.h), lo=Math.min(...vals),hi=Math.max(...vals),range=Math.max(10,hi-lo), end=state.samples.at(-1).t;
-  ctx.beginPath(); state.samples.forEach((s,i)=>{const x=w*(1-(end-s.t)/10),y=h-16-(s.h-lo)/range*(h-32);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.strokeStyle='#ba7cff';ctx.lineWidth=2;ctx.stroke();
-  const s=state.samples.at(-1),x=w,y=h-16-(s.h-lo)/range*(h-32);ctx.fillStyle='#ffad7a';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
+function renderChart(ctx,w,h,withAxes=false){
+  const pad=withAxes?{l:82,r:34,t:62,b:70}:{l:0,r:0,t:0,b:0}, pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
+  ctx.clearRect(0,0,w,h); ctx.fillStyle=withAxes?'#06171e':'transparent'; if(withAxes)ctx.fillRect(0,0,w,h);
+  if(state.samples.length<2)return; const vals=state.samples.map(s=>s.h), rawLo=Math.min(...vals),rawHi=Math.max(...vals),range=Math.max(10,rawHi-rawLo),lo=rawLo-range*.08,hi=rawHi+range*.08,end=state.samples.at(-1).t;
+  ctx.strokeStyle='rgba(185,230,224,.16)';ctx.lineWidth=1; for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
+  ctx.beginPath(); state.samples.forEach((s,i)=>{const x=pad.l+pw*(1-(end-s.t)/10),y=pad.t+ph-(s.h-lo)/(hi-lo)*ph;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.strokeStyle='#4ee0c1';ctx.lineWidth=withAxes?4:2;ctx.stroke();
+  const s=state.samples.at(-1),x=pad.l+pw,y=pad.t+ph-(s.h-lo)/(hi-lo)*ph;ctx.fillStyle='#ff9a5b';ctx.beginPath();ctx.arc(x,y,withAxes?6:4,0,Math.PI*2);ctx.fill();
+  if(!withAxes)return;
+  ctx.fillStyle='#e7f7f5';ctx.font='600 24px system-ui';ctx.fillText('Hue vs. time',pad.l,34);ctx.font='18px system-ui';ctx.fillStyle='#91aaa9';
+  for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.fillText((hi-(hi-lo)*i/4).toFixed(1)+'°',12,y+6);const sec=-10+10*i;const x=pad.l+pw*i/4;ctx.textAlign='center';ctx.fillText(sec===0?'0':sec+' s',x,h-38);}ctx.textAlign='center';ctx.fillText('Time relative to latest sample (s)',pad.l+pw/2,h-10);
+  ctx.save();ctx.translate(24,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Hue (degrees)',0,0);ctx.restore();ctx.textAlign='left';
 }
+function drawChart(){ const rect=chart.getBoundingClientRect(),dpr=devicePixelRatio||1;chart.width=rect.width*dpr;chart.height=rect.height*dpr;const ctx=chart.getContext('2d');ctx.scale(dpr,dpr);renderChart(ctx,rect.width,rect.height,false); }
+function chartPng(){ const c=document.createElement('canvas');c.width=1400;c.height=820;renderChart(c.getContext('2d'),c.width,c.height,true);return c.toDataURL('image/png'); }
 async function startCamera(){
-  try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:60,max:60}},audio:false}); video.srcObject=state.stream; await video.play(); $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('stopCameraButton').disabled=false; $('videoButton').disabled=typeof MediaRecorder==='undefined'; $('recordButton').disabled=false; setStatus('Camera ready',true); if(typeof MediaRecorder==='undefined')setSaveStatus('Video recording is not available in this browser. CSV export remains available.'); }
+  try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160},aspectRatio:{ideal:16/9},frameRate:{ideal:30,max:60}},audio:false}); video.srcObject=state.stream; await video.play(); const settings=state.stream.getVideoTracks()[0]?.getSettings?.()||{}; const resolution=settings.width&&settings.height?` · ${settings.width}×${settings.height}`:''; $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('stopCameraButton').disabled=false; $('videoButton').disabled=typeof MediaRecorder==='undefined'; $('recordButton').disabled=false; setStatus('Camera ready'+resolution,true); if(typeof MediaRecorder==='undefined')setSaveStatus('Video recording is not available in this browser. CSV export remains available.'); }
   catch(e){ setStatus('Camera permission needed'); alert('Please allow camera access, then reload the page.'); }
 }
 function stopCamera(){
@@ -60,7 +67,7 @@ function stopCamera(){
 }
 function toggleAnalysis(){
   state.active=!state.active; $('recordButton').textContent=state.active?'Stop analysis':'Start analysis'; $('exportButton').disabled=!state.samples.length; if(state.active){state.samples=[];state.frameCount=0;state.lastFrame=performance.now();setStatus('Analysing live',true);state.animation=requestAnimationFrame(analyseFrame);}else{cancelAnimationFrame(state.animation);setStatus('Camera ready',true);$('chartNote').textContent='Analysis paused';drawChart();} }
-function exportCsv(){ const stamp=timeStamp(), name=testBase(); const rows=[`test_name,${name}`,`exported_at,${new Date().toISOString()}`,'time_s,R,G,B,Hue_deg',...state.samples.map(s=>[s.t.toFixed(4),s.r.toFixed(2),s.g.toFixed(2),s.b.toFixed(2),s.h.toFixed(2)].join(','))]; downloadBlob(new Blob([rows.join('\n')],{type:'text/csv'}),`${name}_${stamp}_signal.csv`); setSaveStatus(`Saved ${name}_${stamp}_signal.csv locally.`); }
+function exportCsv(){ const stamp=timeStamp(),name=testBase(),rows=[`test_name,${name}`,`exported_at,${new Date().toISOString()}`,'time_s,R,G,B,Hue_deg',...state.samples.map(s=>[s.t.toFixed(4),s.r.toFixed(2),s.g.toFixed(2),s.b.toFixed(2),s.h.toFixed(2)].join(','))]; downloadBlob(new Blob([rows.join('\n')],{type:'text/csv'}),`${name}_${stamp}_signal.csv`); const png=chartPng(),base64=png.split(',')[1];downloadBlob(new Blob([Uint8Array.from(atob(base64),c=>c.charCodeAt(0))],{type:'image/png'}),`${name}_${stamp}_hue-time.png`); setSaveStatus(`Saved CSV and labelled Hue–time PNG locally.`); }
 function startVideoRecording(){
   if(!state.stream || typeof MediaRecorder==='undefined')return;
   const mp4='video/mp4;codecs=avc1.42E01E', webm='video/webm;codecs=vp8';
