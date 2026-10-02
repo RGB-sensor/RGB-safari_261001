@@ -41,10 +41,10 @@ function dominantFrequency(samples){
 }
 function drawChart(){
   const rect=chart.getBoundingClientRect(), dpr=devicePixelRatio||1; chart.width=rect.width*dpr;chart.height=rect.height*dpr;const ctx=chart.getContext('2d');ctx.scale(dpr,dpr); const w=rect.width,h=rect.height;ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle='rgba(185,230,224,.12)';ctx.lineWidth=1; for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(0,h*i/4);ctx.lineTo(w,h*i/4);ctx.stroke();}
+  ctx.strokeStyle='rgba(225,202,255,.14)';ctx.lineWidth=1; for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(0,h*i/4);ctx.lineTo(w,h*i/4);ctx.stroke();}
   if(state.samples.length<2)return; const vals=state.samples.map(s=>s.h), lo=Math.min(...vals),hi=Math.max(...vals),range=Math.max(10,hi-lo), end=state.samples.at(-1).t;
-  ctx.beginPath(); state.samples.forEach((s,i)=>{const x=w*(1-(end-s.t)/10),y=h-16-(s.h-lo)/range*(h-32);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.strokeStyle='#4ee0c1';ctx.lineWidth=2;ctx.stroke();
-  const s=state.samples.at(-1),x=w,y=h-16-(s.h-lo)/range*(h-32);ctx.fillStyle='#ff9a5b';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
+  ctx.beginPath(); state.samples.forEach((s,i)=>{const x=w*(1-(end-s.t)/10),y=h-16-(s.h-lo)/range*(h-32);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.strokeStyle='#ba7cff';ctx.lineWidth=2;ctx.stroke();
+  const s=state.samples.at(-1),x=w,y=h-16-(s.h-lo)/range*(h-32);ctx.fillStyle='#ffad7a';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
 }
 async function startCamera(){
   try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:60,max:60}},audio:false}); video.srcObject=state.stream; await video.play(); $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('stopCameraButton').disabled=false; $('videoButton').disabled=typeof MediaRecorder==='undefined'; $('recordButton').disabled=false; setStatus('Camera ready',true); if(typeof MediaRecorder==='undefined')setSaveStatus('Video recording is not available in this browser. CSV export remains available.'); }
