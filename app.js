@@ -75,12 +75,14 @@ function stopCamera(){
   state.stream?.getTracks().forEach(track => track.stop());
   state.stream=null; video.srcObject=null;
   $('placeholder').classList.remove('hidden'); $('cameraButton').textContent='Start camera'; $('cameraButton').disabled=false;
-  $('stopCameraButton').disabled=true; $('videoButton').disabled=true; $('recordButton').disabled=true; setStatus('Camera off');
+  $('stopCameraButton').disabled=true; $('videoButton').disabled=true; $('recordButton').disabled=true; $('exportCsvButton').disabled=!state.samples.length; $('exportChartButton').disabled=!state.samples.length; setStatus('Camera off');
 }
 function toggleAnalysis(){
-  state.active=!state.active; $('recordButton').textContent=state.active?'Stop analysis':'Start analysis'; $('exportButton').disabled=!state.samples.length; if(state.active){state.samples=[];state.frameCount=0;state.lastFrame=performance.now();setStatus('Analysing live',true);state.animation=requestAnimationFrame(analyseFrame);}else{cancelAnimationFrame(state.animation);setStatus('Camera ready',true);$('chartNote').textContent='Analysis paused';drawCharts();} }
+  state.active=!state.active; $('recordButton').textContent=state.active?'Stop analysis':'Start analysis'; if(state.active){state.samples=[];state.frameCount=0;state.lastFrame=performance.now();$('exportCsvButton').disabled=true;$('exportChartButton').disabled=true;setStatus('Analysing live',true);state.animation=requestAnimationFrame(analyseFrame);}else{cancelAnimationFrame(state.animation);$('exportCsvButton').disabled=!state.samples.length;$('exportChartButton').disabled=!state.samples.length;setStatus('Camera ready',true);$('chartNote').textContent='Analysis paused';drawCharts();} }
 function downloadPng(dataUrl,filename){const base64=dataUrl.split(',')[1];downloadBlob(new Blob([Uint8Array.from(atob(base64),c=>c.charCodeAt(0))],{type:'image/png'}),filename);}
-function exportCsv(){const stamp=timeStamp(),name=testBase(),rows=[`test_name,${name}`,`exported_at,${new Date().toISOString()}`,'time_s,R,G,B,Hue_deg',...state.samples.map(s=>[s.t.toFixed(4),s.r.toFixed(2),s.g.toFixed(2),s.b.toFixed(2),s.h.toFixed(2)].join(','))];downloadBlob(new Blob([rows.join('\n')],{type:'text/csv'}),`${name}_${stamp}_signal.csv`);downloadPng(rgbChartPng(),`${name}_${stamp}_rgb-time.png`);downloadPng(hueChartPng(),`${name}_${stamp}_hue-time.png`);setSaveStatus('Saved CSV, RGB–time PNG and Hue–time PNG locally.');}
+function exportCsv(){const stamp=timeStamp(),name=testBase(),rows=[`test_name,${name}`,`exported_at,${new Date().toISOString()}`,'time_s,R,G,B,Hue_deg',...state.samples.map(s=>[s.t.toFixed(4),s.r.toFixed(2),s.g.toFixed(2),s.b.toFixed(2),s.h.toFixed(2)].join(','))];downloadBlob(new Blob([rows.join('\n')],{type:'text/csv'}),`${name}_${stamp}_signal.csv`);setSaveStatus(`Saved ${name}_${stamp}_signal.csv locally.`);}
+function combinedChartPng(){const width=1400,height=1660,c=document.createElement('canvas');c.width=width;c.height=height;const ctx=c.getContext('2d');ctx.fillStyle='#06171e';ctx.fillRect(0,0,width,height);const rgbCanvas=document.createElement('canvas'),hueCanvas=document.createElement('canvas');rgbCanvas.width=hueCanvas.width=width;rgbCanvas.height=hueCanvas.height=820;renderRgbChart(rgbCanvas.getContext('2d'),width,820,true);renderChart(hueCanvas.getContext('2d'),width,820,true);ctx.drawImage(rgbCanvas,0,0);ctx.drawImage(hueCanvas,0,840);return c.toDataURL('image/png');}
+function exportChart(){const stamp=timeStamp(),name=testBase();downloadPng(combinedChartPng(),`${name}_${stamp}_rgb-hue-time.png`);setSaveStatus(`Saved ${name}_${stamp}_rgb-hue-time.png locally.`);}
 function startVideoRecording(){
   if(!state.stream || typeof MediaRecorder==='undefined')return;
   const mp4='video/mp4;codecs=avc1.42E01E', webm='video/webm;codecs=vp8';
@@ -93,7 +95,7 @@ function startVideoRecording(){
 }
 function stopVideoRecording(){ if(state.recorder?.state==='recording')state.recorder.stop(); }
 function toggleVideoRecording(){ state.recorder?.state==='recording' ? stopVideoRecording() : startVideoRecording(); }
-$('cameraButton').onclick=startCamera; $('recordButton').onclick=toggleAnalysis; $('exportButton').onclick=exportCsv;
+$('cameraButton').onclick=startCamera; $('recordButton').onclick=toggleAnalysis; $('exportCsvButton').onclick=exportCsv; $('exportChartButton').onclick=exportChart;
 $('stopCameraButton').onclick=stopCamera;
 $('videoButton').onclick=toggleVideoRecording;
 let drag=null; roi.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,rx:state.roi.x,ry:state.roi.y};roi.setPointerCapture(e.pointerId);});roi.addEventListener('pointermove',e=>{if(!drag)return;const r=stage.getBoundingClientRect();state.roi.x=clamp(drag.rx+(e.clientX-drag.x)/r.width,0,1-state.roi.w);state.roi.y=clamp(drag.ry+(e.clientY-drag.y)/r.height,0,1-state.roi.w);updateRoi();});roi.addEventListener('pointerup',()=>drag=null);
