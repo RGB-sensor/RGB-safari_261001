@@ -40,7 +40,8 @@ function dominantFrequency(samples){
   return variance < 0.08 ? null : bestF;
 }
 function renderChart(ctx,w,h,withAxes=false){
-  const pad=withAxes?{l:82,r:34,t:62,b:70}:{l:0,r:0,t:0,b:0}, pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
+  // Extra left margin keeps the vertical axis title clear of the numeric ticks.
+  const pad=withAxes?{l:180,r:34,t:62,b:70}:{l:0,r:0,t:0,b:0}, pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
   ctx.clearRect(0,0,w,h); ctx.fillStyle=withAxes?'#06171e':'transparent'; if(withAxes)ctx.fillRect(0,0,w,h);
   if(state.samples.length<2)return; const vals=state.samples.map(s=>s.h), rawLo=Math.min(...vals),rawHi=Math.max(...vals),range=Math.max(10,rawHi-rawLo),lo=rawLo-range*.08,hi=rawHi+range*.08,end=state.samples.at(-1).t;
   ctx.strokeStyle='rgba(185,230,224,.16)';ctx.lineWidth=1; for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
@@ -48,18 +49,18 @@ function renderChart(ctx,w,h,withAxes=false){
   const s=state.samples.at(-1),x=pad.l+pw,y=pad.t+ph-(s.h-lo)/(hi-lo)*ph;ctx.fillStyle='#ff9a5b';ctx.beginPath();ctx.arc(x,y,withAxes?6:4,0,Math.PI*2);ctx.fill();
   if(!withAxes)return;
   ctx.fillStyle='#e7f7f5';ctx.font='600 24px system-ui';ctx.fillText('Hue vs. time',pad.l,34);ctx.font='18px system-ui';ctx.fillStyle='#91aaa9';
-  for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.fillText((hi-(hi-lo)*i/4).toFixed(1)+'°',12,y+6);const sec=-10+10*i;const x=pad.l+pw*i/4;ctx.textAlign='center';ctx.fillText(sec===0?'0':sec+' s',x,h-38);}ctx.textAlign='center';ctx.fillText('Time relative to latest sample (s)',pad.l+pw/2,h-10);
-  ctx.save();ctx.translate(24,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Hue (degrees)',0,0);ctx.restore();ctx.textAlign='left';
+  for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.textAlign='right';ctx.fillText((hi-(hi-lo)*i/4).toFixed(1)+'°',pad.l-16,y+6);const sec=-10+10*i;const x=pad.l+pw*i/4;ctx.textAlign='center';ctx.fillText(sec===0?'0':sec+' s',x,h-38);}ctx.textAlign='center';ctx.fillText('Time relative to latest sample (s)',pad.l+pw/2,h-10);
+  ctx.save();ctx.translate(38,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Hue (degrees)',0,0);ctx.restore();ctx.textAlign='left';
 }
 function drawChart(){ const rect=chart.getBoundingClientRect(),dpr=devicePixelRatio||1;chart.width=rect.width*dpr;chart.height=rect.height*dpr;const ctx=chart.getContext('2d');ctx.scale(dpr,dpr);renderChart(ctx,rect.width,rect.height,false); }
 function renderRgbChart(ctx,w,h,withAxes=false){
-  const pad=withAxes?{l:82,r:34,t:62,b:70}:{l:0,r:0,t:0,b:0},pw=w-pad.l-pad.r,ph=h-pad.t-pad.b,end=state.samples.at(-1)?.t||0;
+  const pad=withAxes?{l:180,r:34,t:62,b:70}:{l:0,r:0,t:0,b:0},pw=w-pad.l-pad.r,ph=h-pad.t-pad.b,end=state.samples.at(-1)?.t||0;
   ctx.clearRect(0,0,w,h);ctx.fillStyle=withAxes?'#06171e':'transparent';if(withAxes)ctx.fillRect(0,0,w,h);if(state.samples.length<2)return;
   const values=state.samples.flatMap(s=>[s.r,s.g,s.b]),rawLo=Math.min(...values),rawHi=Math.max(...values),range=Math.max(5,rawHi-rawLo),lo=Math.max(0,rawLo-range*.15),hi=Math.min(255,rawHi+range*.15),displayRange=Math.max(1,hi-lo);
   ctx.strokeStyle='rgba(185,230,224,.16)';ctx.lineWidth=1;for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
   const series=[['r','#ff7878'],['g','#5be6a7'],['b','#78adff']];for(const [key,color] of series){ctx.beginPath();state.samples.forEach((s,i)=>{const x=pad.l+pw*(1-(end-s.t)/10),y=pad.t+ph-(s[key]-lo)/displayRange*ph;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.strokeStyle=color;ctx.lineWidth=withAxes?4:2;ctx.stroke();}
   if(!withAxes)return;ctx.fillStyle='#e7f7f5';ctx.font='600 24px system-ui';ctx.fillText('RGB vs. time',pad.l,34);ctx.font='18px system-ui';ctx.fillStyle='#91aaa9';
-  for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.fillText((hi-displayRange*i/4).toFixed(1),22,y+6);const sec=-10+10*i,x=pad.l+pw*i/4;ctx.textAlign='center';ctx.fillText(sec===0?'0':sec+' s',x,h-38);}ctx.textAlign='center';ctx.fillText('Time relative to latest sample (s)',pad.l+pw/2,h-10);ctx.save();ctx.translate(24,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Mean channel value (auto-scaled)',0,0);ctx.restore();ctx.textAlign='left';
+  for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.textAlign='right';ctx.fillText((hi-displayRange*i/4).toFixed(1),pad.l-16,y+6);const sec=-10+10*i,x=pad.l+pw*i/4;ctx.textAlign='center';ctx.fillText(sec===0?'0':sec+' s',x,h-38);}ctx.textAlign='center';ctx.fillText('Time relative to latest sample (s)',pad.l+pw/2,h-10);ctx.save();ctx.translate(38,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Mean channel value (auto-scaled)',0,0);ctx.restore();ctx.textAlign='left';
 }
 function drawRgbChart(){const rect=rgbChart.getBoundingClientRect(),dpr=devicePixelRatio||1;rgbChart.width=rect.width*dpr;rgbChart.height=rect.height*dpr;const ctx=rgbChart.getContext('2d');ctx.scale(dpr,dpr);renderRgbChart(ctx,rect.width,rect.height,false);}
 function drawCharts(){drawRgbChart();drawChart();}
