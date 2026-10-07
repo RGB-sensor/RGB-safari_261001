@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#06131b" />
   <title>VibraColor Lab</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%2306131b'/%3E%3Cpath d='M8 36c8 0 8-17 16-17s8 26 16 26 8-17 16-17' fill='none' stroke='%234ee0c1' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="style.css?v=green-2" />
+  <link rel="stylesheet" href="style.css?v=green-3" />
 </head>
 <body>
   <main>
@@ -48,6 +48,12 @@
     </section>
 
     <section class="signal-card">
+      <div class="section-heading"><div><p class="eyebrow">LIVE SIGNAL</p><h2>RGB vs. time</h2></div><p>Each line is the mean colour in the ROI</p></div>
+      <canvas id="rgbChart" aria-label="RGB signal chart"></canvas>
+      <div class="legend"><span><i class="line red"></i>Red</span><span><i class="line green"></i>Green</span><span><i class="line blue"></i>Blue</span><span>Window: 10 s</span></div>
+    </section>
+
+    <section class="signal-card">
       <div class="section-heading"><div><p class="eyebrow">LIVE SIGNAL</p><h2>Hue vs. time</h2></div><p id="chartNote">Waiting for analysis</p></div>
       <canvas id="chart" aria-label="Hue signal chart"></canvas>
       <div class="legend"><span><i class="line"></i>Hue</span><span><i class="dot"></i>Live sample</span><span>Window: 10 s</span></div>
@@ -59,7 +65,7 @@
         <li>Mount phone and sample. Keep LED position, distance and angle fixed.</li>
         <li>Tap <b>Start camera</b>, then drag the ROI onto one uniform coloured area.</li>
         <li>Tap <b>Start analysis</b>. Test 1, 2, 5 and 10 Hz separately for 10 s each. For a pulse-like signal, read the result in bpm.</li>
-        <li>Export the CSV and labelled Hue–time PNG plot for later calibration.</li>
+        <li>Export the CSV plus labelled RGB–time and Hue–time PNG plots for later calibration.</li>
       </ol>
       <p class="note">Research prototype: browser camera settings may vary by iPhone model. Use the same phone and fixed illumination for comparisons.</p>
     </section>

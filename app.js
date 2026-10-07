@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const video = $('video'), roi = $('roi'), stage = $('stage'), chart = $('chart');
+const video = $('video'), roi = $('roi'), stage = $('stage'), chart = $('chart'), rgbChart = $('rgbChart');
 const state = { stream:null, active:false, samples:[], animation:null, roi:{x:.345,y:.345,w:.31}, lastFrame:0, frameCount:0, recorder:null, videoChunks:[], videoMime:'' };
 
 function setStatus(text, live=false){ $('status').classList.toggle('live',live); $('status').querySelector('span').textContent=text; }
@@ -31,7 +31,7 @@ function analyseFrame(now){
       $('freqDetail').textContent = frequency.toFixed(2) + ' Hz · last 10 s';
     }
   }
-  drawChart(); state.animation=requestAnimationFrame(analyseFrame);
+  drawCharts(); state.animation=requestAnimationFrame(analyseFrame);
 }
 function dominantFrequency(samples){
   if(samples.length<40 || samples.at(-1).t - samples[0].t < 8)return null; const windowed=samples.filter(s=>samples.at(-1).t-s.t<10), n=windowed.length; if(n<35)return null; const mean=windowed.reduce((a,s)=>a+s.h,0)/n; let bestF=.5,best=0;
@@ -52,7 +52,18 @@ function renderChart(ctx,w,h,withAxes=false){
   ctx.save();ctx.translate(24,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Hue (degrees)',0,0);ctx.restore();ctx.textAlign='left';
 }
 function drawChart(){ const rect=chart.getBoundingClientRect(),dpr=devicePixelRatio||1;chart.width=rect.width*dpr;chart.height=rect.height*dpr;const ctx=chart.getContext('2d');ctx.scale(dpr,dpr);renderChart(ctx,rect.width,rect.height,false); }
-function chartPng(){ const c=document.createElement('canvas');c.width=1400;c.height=820;renderChart(c.getContext('2d'),c.width,c.height,true);return c.toDataURL('image/png'); }
+function renderRgbChart(ctx,w,h,withAxes=false){
+  const pad=withAxes?{l:82,r:34,t:62,b:70}:{l:0,r:0,t:0,b:0},pw=w-pad.l-pad.r,ph=h-pad.t-pad.b,end=state.samples.at(-1)?.t||0;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle=withAxes?'#06171e':'transparent';if(withAxes)ctx.fillRect(0,0,w,h);if(state.samples.length<2)return;
+  ctx.strokeStyle='rgba(185,230,224,.16)';ctx.lineWidth=1;for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
+  const series=[['r','#ff7878'],['g','#5be6a7'],['b','#78adff']];for(const [key,color] of series){ctx.beginPath();state.samples.forEach((s,i)=>{const x=pad.l+pw*(1-(end-s.t)/10),y=pad.t+ph-(s[key]/255)*ph;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.strokeStyle=color;ctx.lineWidth=withAxes?4:2;ctx.stroke();}
+  if(!withAxes)return;ctx.fillStyle='#e7f7f5';ctx.font='600 24px system-ui';ctx.fillText('RGB vs. time',pad.l,34);ctx.font='18px system-ui';ctx.fillStyle='#91aaa9';
+  for(let i=0;i<=4;i++){const y=pad.t+ph*i/4;ctx.fillText(String(Math.round(255-255*i/4)),30,y+6);const sec=-10+10*i,x=pad.l+pw*i/4;ctx.textAlign='center';ctx.fillText(sec===0?'0':sec+' s',x,h-38);}ctx.textAlign='center';ctx.fillText('Time relative to latest sample (s)',pad.l+pw/2,h-10);ctx.save();ctx.translate(24,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Mean channel value (0–255)',0,0);ctx.restore();ctx.textAlign='left';
+}
+function drawRgbChart(){const rect=rgbChart.getBoundingClientRect(),dpr=devicePixelRatio||1;rgbChart.width=rect.width*dpr;rgbChart.height=rect.height*dpr;const ctx=rgbChart.getContext('2d');ctx.scale(dpr,dpr);renderRgbChart(ctx,rect.width,rect.height,false);}
+function drawCharts(){drawRgbChart();drawChart();}
+function hueChartPng(){const c=document.createElement('canvas');c.width=1400;c.height=820;renderChart(c.getContext('2d'),c.width,c.height,true);return c.toDataURL('image/png');}
+function rgbChartPng(){const c=document.createElement('canvas');c.width=1400;c.height=820;renderRgbChart(c.getContext('2d'),c.width,c.height,true);return c.toDataURL('image/png');}
 async function startCamera(){
   try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160},aspectRatio:{ideal:16/9},frameRate:{ideal:30,max:60}},audio:false}); video.srcObject=state.stream; await video.play(); const settings=state.stream.getVideoTracks()[0]?.getSettings?.()||{}; const resolution=settings.width&&settings.height?` · ${settings.width}×${settings.height}`:''; $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('stopCameraButton').disabled=false; $('videoButton').disabled=typeof MediaRecorder==='undefined'; $('recordButton').disabled=false; setStatus('Camera ready'+resolution,true); if(typeof MediaRecorder==='undefined')setSaveStatus('Video recording is not available in this browser. CSV export remains available.'); }
   catch(e){ setStatus('Camera permission needed'); alert('Please allow camera access, then reload the page.'); }
@@ -66,8 +77,9 @@ function stopCamera(){
   $('stopCameraButton').disabled=true; $('videoButton').disabled=true; $('recordButton').disabled=true; setStatus('Camera off');
 }
 function toggleAnalysis(){
-  state.active=!state.active; $('recordButton').textContent=state.active?'Stop analysis':'Start analysis'; $('exportButton').disabled=!state.samples.length; if(state.active){state.samples=[];state.frameCount=0;state.lastFrame=performance.now();setStatus('Analysing live',true);state.animation=requestAnimationFrame(analyseFrame);}else{cancelAnimationFrame(state.animation);setStatus('Camera ready',true);$('chartNote').textContent='Analysis paused';drawChart();} }
-function exportCsv(){ const stamp=timeStamp(),name=testBase(),rows=[`test_name,${name}`,`exported_at,${new Date().toISOString()}`,'time_s,R,G,B,Hue_deg',...state.samples.map(s=>[s.t.toFixed(4),s.r.toFixed(2),s.g.toFixed(2),s.b.toFixed(2),s.h.toFixed(2)].join(','))]; downloadBlob(new Blob([rows.join('\n')],{type:'text/csv'}),`${name}_${stamp}_signal.csv`); const png=chartPng(),base64=png.split(',')[1];downloadBlob(new Blob([Uint8Array.from(atob(base64),c=>c.charCodeAt(0))],{type:'image/png'}),`${name}_${stamp}_hue-time.png`); setSaveStatus(`Saved CSV and labelled Hue–time PNG locally.`); }
+  state.active=!state.active; $('recordButton').textContent=state.active?'Stop analysis':'Start analysis'; $('exportButton').disabled=!state.samples.length; if(state.active){state.samples=[];state.frameCount=0;state.lastFrame=performance.now();setStatus('Analysing live',true);state.animation=requestAnimationFrame(analyseFrame);}else{cancelAnimationFrame(state.animation);setStatus('Camera ready',true);$('chartNote').textContent='Analysis paused';drawCharts();} }
+function downloadPng(dataUrl,filename){const base64=dataUrl.split(',')[1];downloadBlob(new Blob([Uint8Array.from(atob(base64),c=>c.charCodeAt(0))],{type:'image/png'}),filename);}
+function exportCsv(){const stamp=timeStamp(),name=testBase(),rows=[`test_name,${name}`,`exported_at,${new Date().toISOString()}`,'time_s,R,G,B,Hue_deg',...state.samples.map(s=>[s.t.toFixed(4),s.r.toFixed(2),s.g.toFixed(2),s.b.toFixed(2),s.h.toFixed(2)].join(','))];downloadBlob(new Blob([rows.join('\n')],{type:'text/csv'}),`${name}_${stamp}_signal.csv`);downloadPng(rgbChartPng(),`${name}_${stamp}_rgb-time.png`);downloadPng(hueChartPng(),`${name}_${stamp}_hue-time.png`);setSaveStatus('Saved CSV, RGB–time PNG and Hue–time PNG locally.');}
 function startVideoRecording(){
   if(!state.stream || typeof MediaRecorder==='undefined')return;
   const mp4='video/mp4;codecs=avc1.42E01E', webm='video/webm;codecs=vp8';
@@ -84,4 +96,4 @@ $('cameraButton').onclick=startCamera; $('recordButton').onclick=toggleAnalysis;
 $('stopCameraButton').onclick=stopCamera;
 $('videoButton').onclick=toggleVideoRecording;
 let drag=null; roi.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,rx:state.roi.x,ry:state.roi.y};roi.setPointerCapture(e.pointerId);});roi.addEventListener('pointermove',e=>{if(!drag)return;const r=stage.getBoundingClientRect();state.roi.x=clamp(drag.rx+(e.clientX-drag.x)/r.width,0,1-state.roi.w);state.roi.y=clamp(drag.ry+(e.clientY-drag.y)/r.height,0,1-state.roi.w);updateRoi();});roi.addEventListener('pointerup',()=>drag=null);
-window.addEventListener('resize',drawChart); drawChart();
+window.addEventListener('resize',drawCharts); drawCharts();
