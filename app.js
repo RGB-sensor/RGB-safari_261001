@@ -6,7 +6,7 @@ function setStatus(text, live=false){ $('status').classList.toggle('live',live);
 function setSaveStatus(text){ $('saveStatus').textContent=text; }
 function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
 function timeStamp(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`; }
-function testBase(){ const raw=$('testName').value.trim() || 'vibracolor_test'; return raw.replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,48) || 'vibracolor_test'; }
+function testBase(){ const raw=$('testName').value.trim() || 'colour_insight_test'; return raw.replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,48) || 'colour_insight_test'; }
 function downloadBlob(blob, filename){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 function updateRoi(){ roi.style.left=(state.roi.x*100)+'%'; roi.style.top=(state.roi.y*100)+'%'; roi.style.width=(state.roi.w*100)+'%'; }
 function hueFromRGB(r,g,b){ r/=255;g/=255;b/=255; const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min; if(!d)return 0; let h=max===r?(g-b)/d+(g<b?6:0):max===g?(b-r)/d+2:(r-g)/d+4; return h*60; }
