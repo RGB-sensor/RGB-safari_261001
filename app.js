@@ -67,7 +67,7 @@ function drawCharts(){drawRgbChart();drawChart();}
 function hueChartPng(){const c=document.createElement('canvas');c.width=1400;c.height=820;renderChart(c.getContext('2d'),c.width,c.height,true);return c.toDataURL('image/png');}
 function rgbChartPng(){const c=document.createElement('canvas');c.width=1400;c.height=820;renderRgbChart(c.getContext('2d'),c.width,c.height,true);return c.toDataURL('image/png');}
 async function startCamera(){
-  try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160},aspectRatio:{ideal:16/9},frameRate:{ideal:30,max:60}},audio:false}); video.srcObject=state.stream; await video.play(); const settings=state.stream.getVideoTracks()[0]?.getSettings?.()||{}; const resolution=settings.width&&settings.height?` · ${settings.width}×${settings.height}`:''; $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('stopCameraButton').disabled=false; $('videoButton').disabled=typeof MediaRecorder==='undefined'; $('recordButton').disabled=false; setStatus('Camera ready'+resolution,true); if(typeof MediaRecorder==='undefined')setSaveStatus('Video recording is not available in this browser. CSV export remains available.'); }
+  try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},aspectRatio:{ideal:16/9},frameRate:{ideal:30,max:30}},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}); video.srcObject=state.stream; await video.play(); const settings=state.stream.getVideoTracks()[0]?.getSettings?.()||{}; const resolution=settings.width&&settings.height?` · ${settings.width}×${settings.height}`:''; $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('stopCameraButton').disabled=false; $('videoButton').disabled=typeof MediaRecorder==='undefined'; $('recordButton').disabled=false; setStatus('Camera ready'+resolution,true); if(typeof MediaRecorder==='undefined')setSaveStatus('Video recording is not available in this browser. CSV export remains available.'); }
   catch(e){ setStatus('Camera permission needed'); alert('Please allow camera access, then reload the page.'); }
 }
 function stopCamera(){
@@ -86,13 +86,13 @@ function combinedChartPng(){const width=1400,height=1660,c=document.createElemen
 function exportChart(){const stamp=timeStamp(),name=testBase();downloadPng(combinedChartPng(),`${name}_${stamp}_rgb-hue-time.png`);setSaveStatus(`Saved ${name}_${stamp}_rgb-hue-time.png locally.`);}
 function startVideoRecording(){
   if(!state.stream || typeof MediaRecorder==='undefined')return;
-  const mp4='video/mp4;codecs=avc1.42E01E', webm='video/webm;codecs=vp8';
-  state.videoMime=MediaRecorder.isTypeSupported?.(mp4) ? mp4 : (MediaRecorder.isTypeSupported?.(webm) ? webm : '');
+  const mp4Audio='video/mp4;codecs=avc1.42E01E,mp4a.40.2', mp4='video/mp4', webmAudio='video/webm;codecs=vp8,opus', webm='video/webm;codecs=vp8';
+  state.videoMime=MediaRecorder.isTypeSupported?.(mp4Audio) ? mp4Audio : (MediaRecorder.isTypeSupported?.(mp4) ? mp4 : (MediaRecorder.isTypeSupported?.(webmAudio) ? webmAudio : (MediaRecorder.isTypeSupported?.(webm) ? webm : '')));
   try { state.videoChunks=[]; state.recorder=state.videoMime ? new MediaRecorder(state.stream,{mimeType:state.videoMime}) : new MediaRecorder(state.stream); }
   catch(e){ setSaveStatus('Video recording could not start in this browser.'); return; }
   state.recorder.ondataavailable=e=>{ if(e.data.size)state.videoChunks.push(e.data); };
-  state.recorder.onstop=()=>{ const ext=state.recorder.mimeType.includes('mp4')?'mp4':'webm', stamp=timeStamp(), name=testBase(); downloadBlob(new Blob(state.videoChunks,{type:state.recorder.mimeType||'video/webm'}),`${name}_${stamp}_video.${ext}`); setSaveStatus(`Saved ${name}_${stamp}_video.${ext} locally.`); state.videoChunks=[]; state.recorder=null; $('videoButton').textContent='Record video'; if(state.stream)$('videoButton').disabled=false; };
-  state.recorder.start(); $('videoButton').textContent='Stop video & save'; setStatus('Video recording',true); setSaveStatus('Recording video locally. Tap “Stop video & save” when finished.');
+  state.recorder.onstop=()=>{ const ext=state.recorder.mimeType.includes('mp4')?'mp4':'webm', stamp=timeStamp(), name=testBase(); downloadBlob(new Blob(state.videoChunks,{type:state.recorder.mimeType||'video/webm'}),`${name}_${stamp}_video.${ext}`); setSaveStatus(`Saved ${name}_${stamp}_video.${ext} locally.`); state.videoChunks=[]; state.recorder=null; $('videoButton').textContent='Record video + audio'; if(state.stream)$('videoButton').disabled=false; };
+  state.recorder.start(); $('videoButton').textContent='Stop video & save'; setStatus('Video recording',true); setSaveStatus('Recording video and microphone audio locally. Tap “Stop video & save” when finished.');
 }
 function stopVideoRecording(){ if(state.recorder?.state==='recording')state.recorder.stop(); }
 function toggleVideoRecording(){ state.recorder?.state==='recording' ? stopVideoRecording() : startVideoRecording(); }
