@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 const video = $('video'), roi = $('roi'), stage = $('stage'), chart = $('chart'), rgbChart = $('rgbChart');
-const state = { stream:null, active:false, samples:[], animation:null, roi:{x:.345,y:.345,w:.31}, lastFrame:0, frameCount:0, recorder:null, videoChunks:[], videoMime:'' };
+const state = { stream:null, active:false, samples:[], animation:null, roi:{x:.345,y:.345,w:.31}, lastFrame:0, frameCount:0, recorder:null, videoChunks:[], videoMime:'', completedVideo:null };
 
 function setStatus(text, live=false){ $('status').classList.toggle('live',live); $('status').querySelector('span').textContent=text; }
 function setSaveStatus(text){ $('saveStatus').textContent=text; }
@@ -67,7 +67,7 @@ function drawCharts(){drawRgbChart();drawChart();}
 function hueChartPng(){const c=document.createElement('canvas');c.width=1400;c.height=820;renderChart(c.getContext('2d'),c.width,c.height,true);return c.toDataURL('image/png');}
 function rgbChartPng(){const c=document.createElement('canvas');c.width=1400;c.height=820;renderRgbChart(c.getContext('2d'),c.width,c.height,true);return c.toDataURL('image/png');}
 async function startCamera(){
-  try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},aspectRatio:{ideal:16/9},frameRate:{ideal:30,max:30}},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}); video.srcObject=state.stream; await video.play(); const settings=state.stream.getVideoTracks()[0]?.getSettings?.()||{}; const resolution=settings.width&&settings.height?` · ${settings.width}×${settings.height}`:''; $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('stopCameraButton').disabled=false; $('videoButton').disabled=typeof MediaRecorder==='undefined'; $('recordButton').disabled=false; setStatus('Camera ready'+resolution,true); if(typeof MediaRecorder==='undefined')setSaveStatus('Video recording is not available in this browser. CSV export remains available.'); }
+  try{ state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},aspectRatio:{ideal:16/9},frameRate:{ideal:30,max:30}},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}); video.srcObject=state.stream; await video.play(); const settings=state.stream.getVideoTracks()[0]?.getSettings?.()||{}; const resolution=settings.width&&settings.height?` · ${settings.width}×${settings.height}`:''; $('placeholder').classList.add('hidden'); $('cameraButton').textContent='Camera on'; $('cameraButton').disabled=true; $('stopCameraButton').disabled=false; $('videoButton').disabled=true; $('recordButton').disabled=false; setStatus('Camera ready'+resolution,true); if(typeof MediaRecorder==='undefined')setSaveStatus('Video recording is not available in this browser. CSV export remains available.'); }
   catch(e){ setStatus('Camera permission needed'); alert('Please allow camera access, then reload the page.'); }
 }
 function stopCamera(){
@@ -76,10 +76,10 @@ function stopCamera(){
   state.stream?.getTracks().forEach(track => track.stop());
   state.stream=null; video.srcObject=null;
   $('placeholder').classList.remove('hidden'); $('cameraButton').textContent='Start camera'; $('cameraButton').disabled=false;
-  $('stopCameraButton').disabled=true; $('videoButton').disabled=true; $('recordButton').disabled=true; $('exportCsvButton').disabled=!state.samples.length; $('exportChartButton').disabled=!state.samples.length; setStatus('Camera off');
+  $('stopCameraButton').disabled=true; $('videoButton').disabled=!state.completedVideo; $('recordButton').disabled=true; $('exportCsvButton').disabled=!state.samples.length; $('exportChartButton').disabled=!state.samples.length; setStatus('Camera off');
 }
 function toggleAnalysis(){
-  state.active=!state.active; $('recordButton').textContent=state.active?'Stop analysis':'Start analysis'; if(state.active){state.samples=[];state.frameCount=0;state.lastFrame=performance.now();$('exportCsvButton').disabled=true;$('exportChartButton').disabled=true;setStatus('Analysing live',true);state.animation=requestAnimationFrame(analyseFrame);}else{cancelAnimationFrame(state.animation);$('exportCsvButton').disabled=!state.samples.length;$('exportChartButton').disabled=!state.samples.length;setStatus('Camera ready',true);$('chartNote').textContent='Analysis paused';drawCharts();} }
+  state.active=!state.active; $('recordButton').textContent=state.active?'Stop analysis':'Start analysis'; if(state.active){state.samples=[];state.frameCount=0;state.lastFrame=performance.now();state.completedVideo=null;$('videoButton').disabled=true;$('exportCsvButton').disabled=true;$('exportChartButton').disabled=true;startVideoRecording();setStatus(state.recorder?'Analysing & recording':'Analysing live',true);state.animation=requestAnimationFrame(analyseFrame);}else{cancelAnimationFrame(state.animation);stopVideoRecording();$('exportCsvButton').disabled=!state.samples.length;$('exportChartButton').disabled=!state.samples.length;setStatus('Camera ready',true);$('chartNote').textContent='Analysis paused';drawCharts();} }
 function downloadPng(dataUrl,filename){const base64=dataUrl.split(',')[1];downloadBlob(new Blob([Uint8Array.from(atob(base64),c=>c.charCodeAt(0))],{type:'image/png'}),filename);}
 function exportCsv(){const stamp=timeStamp(),name=testBase(),rows=[`test_name,${name}`,`exported_at,${new Date().toISOString()}`,'time_s,R,G,B,Hue_deg',...state.samples.map(s=>[s.t.toFixed(4),s.r.toFixed(2),s.g.toFixed(2),s.b.toFixed(2),s.h.toFixed(2)].join(','))];downloadBlob(new Blob([rows.join('\n')],{type:'text/csv'}),`${name}_${stamp}_signal.csv`);setSaveStatus(`Saved ${name}_${stamp}_signal.csv locally.`);}
 function combinedChartPng(){const width=1400,height=1660,c=document.createElement('canvas');c.width=width;c.height=height;const ctx=c.getContext('2d');ctx.fillStyle='#06171e';ctx.fillRect(0,0,width,height);const rgbCanvas=document.createElement('canvas'),hueCanvas=document.createElement('canvas');rgbCanvas.width=hueCanvas.width=width;rgbCanvas.height=hueCanvas.height=820;renderRgbChart(rgbCanvas.getContext('2d'),width,820,true);renderChart(hueCanvas.getContext('2d'),width,820,true);ctx.drawImage(rgbCanvas,0,0);ctx.drawImage(hueCanvas,0,840);return c.toDataURL('image/png');}
@@ -91,13 +91,13 @@ function startVideoRecording(){
   try { state.videoChunks=[]; state.recorder=state.videoMime ? new MediaRecorder(state.stream,{mimeType:state.videoMime}) : new MediaRecorder(state.stream); }
   catch(e){ setSaveStatus('Video recording could not start in this browser.'); return; }
   state.recorder.ondataavailable=e=>{ if(e.data.size)state.videoChunks.push(e.data); };
-  state.recorder.onstop=()=>{ const ext=state.recorder.mimeType.includes('mp4')?'mp4':'webm', stamp=timeStamp(), name=testBase(); downloadBlob(new Blob(state.videoChunks,{type:state.recorder.mimeType||'video/webm'}),`${name}_${stamp}_video.${ext}`); setSaveStatus(`Saved ${name}_${stamp}_video.${ext} locally.`); state.videoChunks=[]; state.recorder=null; $('videoButton').textContent='Record video + audio'; if(state.stream)$('videoButton').disabled=false; };
-  state.recorder.start(); $('videoButton').textContent='Stop video & save'; setStatus('Video recording',true); setSaveStatus('Recording video and microphone audio locally. Tap “Stop video & save” when finished.');
+  state.recorder.onstop=()=>{ const ext=state.recorder.mimeType.includes('mp4')?'mp4':'webm', stamp=timeStamp(), name=testBase(); state.completedVideo={blob:new Blob(state.videoChunks,{type:state.recorder.mimeType||'video/webm'}),filename:`${name}_${stamp}_video.${ext}`}; state.videoChunks=[]; state.recorder=null; $('videoButton').disabled=false; setSaveStatus('Video and audio are ready. Choose “Save video + audio” only if you want to keep this recording.'); };
+  state.recorder.start(); setSaveStatus('Recording video and microphone audio locally. It will stop when analysis stops.');
 }
 function stopVideoRecording(){ if(state.recorder?.state==='recording')state.recorder.stop(); }
-function toggleVideoRecording(){ state.recorder?.state==='recording' ? stopVideoRecording() : startVideoRecording(); }
+function saveCompletedVideo(){ if(!state.completedVideo)return; downloadBlob(state.completedVideo.blob,state.completedVideo.filename); setSaveStatus(`Saved ${state.completedVideo.filename} locally.`); }
 $('cameraButton').onclick=startCamera; $('recordButton').onclick=toggleAnalysis; $('exportCsvButton').onclick=exportCsv; $('exportChartButton').onclick=exportChart;
 $('stopCameraButton').onclick=stopCamera;
-$('videoButton').onclick=toggleVideoRecording;
+$('videoButton').onclick=saveCompletedVideo;
 let drag=null; roi.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,rx:state.roi.x,ry:state.roi.y};roi.setPointerCapture(e.pointerId);});roi.addEventListener('pointermove',e=>{if(!drag)return;const r=stage.getBoundingClientRect();state.roi.x=clamp(drag.rx+(e.clientX-drag.x)/r.width,0,1-state.roi.w);state.roi.y=clamp(drag.ry+(e.clientY-drag.y)/r.height,0,1-state.roi.w);updateRoi();});roi.addEventListener('pointerup',()=>drag=null);
 window.addEventListener('resize',drawCharts); drawCharts();
